@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 
 export const runtime = 'nodejs';
 
-export async function GET(req: NextRequest) {
+async function handler(req: NextRequest) {
   // Verify the cron secret to prevent unauthorized calls
   const authHeader = req.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -18,6 +18,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Scraper failed' }, { status: 500 });
   }
 }
+
+export const GET = handler;
+export const POST = handler;
 
 function runScraper(): Promise<void> {
   return new Promise((resolve, reject) => {
