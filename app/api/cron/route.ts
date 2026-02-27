@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 
-export const config = {
-  runtime: 'nodejs',
-};
+export const runtime = 'nodejs';
 
-export default async function handler(req: NextRequest) {
-  if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+export async function GET(req: NextRequest) {
+  // Verify the cron secret to prevent unauthorized calls
+  const authHeader = req.headers.get('authorization');
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
