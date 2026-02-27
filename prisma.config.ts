@@ -6,12 +6,8 @@ import { Pool } from "@neondatabase/serverless";
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
+    provider: "postgresql",
     url: process.env.DATABASE_URL!,
-  },
-  migrate: {
-    async adapter() {
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      return new PrismaNeon(pool);
-    },
+    directUrl: process.env.DIRECT_DATABASE_URL,
   },
 });
