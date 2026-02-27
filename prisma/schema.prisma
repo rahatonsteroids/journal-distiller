@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Article {
+  id               String   @id @default(cuid())
+  title            String
+  originalAbstract String
+  authors          String[]
+  journalName      String
+  doi              String?  @unique
+  url              String
+  publishedAt      DateTime
+  createdAt        DateTime @default(now())
+  Summary          Summary?
+}
+
+model Summary {
+  id                String   @id
+  bottomLine        String
+  methodology       String
+  clinicalImpact    String
+  visualAbstractUrl String?
+  isPublished       Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime
+  articleId         String   @unique
+  Article           Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+}
