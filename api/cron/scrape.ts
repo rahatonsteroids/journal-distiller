@@ -22,10 +22,15 @@ export default async function handler(req: NextRequest) {
 function runScraper(): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn('npm', ['run', 'scrape']);
+
     child.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`Scraper exited with code ${code}`));
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`Scraper exited with code ${code}`));
+      }
     });
+
     child.on('error', reject);
   });
 }
