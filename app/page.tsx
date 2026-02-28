@@ -602,48 +602,48 @@ export default async function Home({
       </main>
 
       {!fetchError && totalPages > 1 && (
-        <div className="pagination">
-          <span className="pagination-info">
-            {offset + 1}&#8211;{Math.min(offset + PAGE_SIZE, totalCount)} of {totalCount}
-          </span>
-          <div className="pagination-controls">
-            
-              href={buildUrl({ page: currentPage - 1 })}
-              className={`pagination-btn${currentPage <= 1 ? " disabled" : ""}`}
-            >
-              &#8592; Prev
-            </a>
-            <div className="pagination-pages">
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                .reduce<(number | "...")[]>((acc, p, idx, arr) => {
-                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("...");
-                  acc.push(p);
-                  return acc;
-                }, [])
-                .map((p, i) =>
-                  p === "..." ? (
-                    <span key={`e${i}`} className="pagination-ellipsis">&#8230;</span>
-                  ) : (
-                    
-                      key={p}
-                      href={buildUrl({ page: p as number })}
-                      className={`pagination-page${p === currentPage ? " active" : ""}`}
-                    >
-                      {p}
-                    </a>
-                  )
-                )}
-            </div>
-            
-              href={buildUrl({ page: currentPage + 1 })}
-              className={`pagination-btn${currentPage >= totalPages ? " disabled" : ""}`}
-            >
-              Next &#8594;
-            </a>
-          </div>
-        </div>
-      )}
+  <div className="pagination">
+    <span className="pagination-info">
+      {offset + 1}&#8211;{Math.min(offset + PAGE_SIZE, totalCount)} of {totalCount}
+    </span>
+    <div className="pagination-controls">
+      
+        href={buildUrl({ page: currentPage - 1 })}
+        className={`pagination-btn${currentPage <= 1 ? " disabled" : ""}`}
+      >
+        {'\u2190'} Prev
+      </a>
+      <div className="pagination-pages">
+        {Array.from({ length: totalPages }, (_, i) => i + 1)
+          .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+          .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+            if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("...");
+            acc.push(p);
+            return acc;
+          }, [])
+          .map((p, i) =>
+            p === "..." ? (
+              <span key={`e${i}`} className="pagination-ellipsis">&#8230;</span>
+            ) : (
+              
+                key={p}
+                href={buildUrl({ page: p as number })}
+                className={`pagination-page${p === currentPage ? " active" : ""}`}
+              >
+                {p}
+              </a>
+            )
+          )}
+      </div>
+      
+        href={buildUrl({ page: currentPage + 1 })}
+        className={`pagination-btn${currentPage >= totalPages ? " disabled" : ""}`}
+      >
+        Next {'\u2192'}
+      </a>
+    </div>
+  </div>
+)}
 
       <footer className="footer">
         <div className="footer-inner">
