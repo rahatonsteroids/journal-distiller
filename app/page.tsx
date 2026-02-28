@@ -607,7 +607,7 @@ export default async function Home({
             {offset + 1}&#8211;{Math.min(offset + PAGE_SIZE, totalCount)} of {totalCount}
           </span>
           <div className="pagination-controls">
-            <a
+            
               href={buildUrl({ page: currentPage - 1 })}
               className={`pagination-btn${currentPage <= 1 ? " disabled" : ""}`}
             >
@@ -625,7 +625,7 @@ export default async function Home({
                   p === "..." ? (
                     <span key={`e${i}`} className="pagination-ellipsis">&#8230;</span>
                   ) : (
-                    <a
+                    
                       key={p}
                       href={buildUrl({ page: p as number })}
                       className={`pagination-page${p === currentPage ? " active" : ""}`}
@@ -635,7 +635,7 @@ export default async function Home({
                   )
                 )}
             </div>
-            <a
+            
               href={buildUrl({ page: currentPage + 1 })}
               className={`pagination-btn${currentPage >= totalPages ? " disabled" : ""}`}
             >
@@ -649,6 +649,7 @@ export default async function Home({
         <div className="footer-inner">
           <span className="footer-brand">Bite&#8209;Sized Club</span>
           <span className="footer-copy">Open Access &#183; Medical Research</span>
+          <a href="/admin" style={{ fontSize: "0.62rem", color: "#c8a96e", textDecoration: "none", letterSpacing: "0.1em", textTransform: "uppercase" }}>Admin</a>
         </div>
         <div className="footer-disclaimer">
           All article titles, abstracts, and metadata belong to their respective publishers and authors.
