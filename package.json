@@ -13,6 +13,7 @@
     "@prisma/adapter-neon": "^7.4.1",
     "@prisma/adapter-pg": "^7.4.1",
     "@prisma/client": "^7.4.1",
+    "@vercel/analytics": "^1.6.1",
     "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
