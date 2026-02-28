@@ -29,7 +29,7 @@ Write only the summary, no preamble or labels.`;
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
+        model: "llama3-8b-8192",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.4,
         max_tokens: 200,
