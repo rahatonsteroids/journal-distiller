@@ -33,23 +33,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(result[0]);
 }
 
-export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = isAdmin(req);
-  if (!admin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const { id } = await params;
-  const { name, url } = await req.json();
-  const sql = getDb();
-  const result = await sql`
-    UPDATE journals
-    SET name = ${name}, url = ${url}
-    WHERE id = ${id}
-    RETURNING id, name, url
-  `;
-  return NextResponse.json(result[0]);
-}
-
 export async function DELETE(req: NextRequest) {
   const admin = isAdmin(req);
   if (!admin) {

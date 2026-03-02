@@ -1,32 +1,42 @@
+import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/prisma";
-import { NextResponse, NextRequest } from "next/server";
+
+function isAdmin(req: NextRequest) {
+  return req.cookies.get("admin_token");
+}
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const admin = isAdmin(request);
+  if (!admin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const { id } = await params;
+  const { name, url } = await request.json();
   const sql = getDb();
-  const body = await request.json();
-  const updated = await sql`
+  const result = await sql`
     UPDATE journals
-    SET name = ${body.name},
-        url = ${body.url}
+    SET name = ${name}, url = ${url}
     WHERE id = ${id}
-    RETURNING *
+    RETURNING id, name, url
   `;
-  return NextResponse.json(updated[0]);
+  return NextResponse.json(result[0]);
 }
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const admin = isAdmin(request);
+  if (!admin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const { id } = await params;
   const sql = getDb();
   await sql`
-    DELETE FROM journals
-    WHERE id = ${id}
+    DELETE FROM journals WHERE id = ${id}
   `;
   return NextResponse.json({ success: true });
 }
