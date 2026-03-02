@@ -13,7 +13,7 @@ export default async function AdminPage() {
     redirect("/admin/login");
   }
 
-  let journals = [];
+let journals: any[] = [];
   try {
     const sql = getDb();
     journals = await sql`SELECT id, name, url FROM journals ORDER BY id DESC`;
