@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 
+export const runtime = "nodejs";
+
 type SummarisePayload = {
   pmid?: string;
   doi?: string;
@@ -9,6 +11,12 @@ type SummarisePayload = {
   abstract?: string;
   url?: string;
 };
+
+const DEFAULT_GROQ_MODELS = [
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+  "qwen/qwen3-32b",
+];
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -24,6 +32,79 @@ function safeJsonParse(text: string): unknown {
 
 function cleanText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+async function fetchWithTimeout(input: string, init?: RequestInit, timeoutMs = 8000): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+}
+
+function extractGroqSummary(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const data = payload as Record<string, unknown>;
+  const choices = Array.isArray(data.choices) ? data.choices : [];
+  const firstChoice = (choices[0] ?? {}) as { message?: { content?: unknown } };
+  return asString(firstChoice.message?.content).trim();
+}
+
+function isModelDecommissioned(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const data = payload as Record<string, unknown>;
+  const errorObj = data.error;
+  if (!errorObj || typeof errorObj !== "object") return false;
+  const err = errorObj as Record<string, unknown>;
+  return asString(err.code) === "model_decommissioned";
+}
+
+async function generateSummaryWithGroq(
+  groqApiKey: string,
+  prompt: string
+): Promise<{ summary: string; status: number }> {
+  const configuredModel = asString(process.env.GROQ_MODEL).trim();
+  const modelCandidates = configuredModel
+    ? [configuredModel, ...DEFAULT_GROQ_MODELS.filter((m) => m !== configuredModel)]
+    : DEFAULT_GROQ_MODELS;
+
+  let lastStatus = 502;
+
+  for (const model of modelCandidates) {
+    const groqResponse = await fetchWithTimeout("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${groqApiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 200,
+        temperature: 0.7,
+      }),
+    });
+
+    const rawGroq = await groqResponse.text();
+    const parsedGroq = safeJsonParse(rawGroq);
+    lastStatus = groqResponse.status;
+
+    if (!groqResponse.ok) {
+      if (isModelDecommissioned(parsedGroq)) {
+        console.warn(`Groq model deprecated, retrying with next model: ${model}`);
+        continue;
+      }
+      console.error("Groq API error:", groqResponse.status, groqResponse.statusText, rawGroq.slice(0, 500));
+      return { summary: "", status: 502 };
+    }
+
+    const summary = extractGroqSummary(parsedGroq);
+    if (summary) return { summary, status: 200 };
+    console.error("Groq response missing summary content:", rawGroq.slice(0, 500));
+    return { summary: "", status: 500 };
+  }
+
+  console.error("All configured Groq models failed or were deprecated.");
+  return { summary: "", status: lastStatus >= 400 && lastStatus < 600 ? 502 : 500 };
 }
 
 function extractFullTextFromHtml(html: string): string {
@@ -72,7 +153,7 @@ function extractFullTextFromHtml(html: string): string {
 async function fetchHtmlTextFromUrl(url: string): Promise<string> {
   if (!url) return "";
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: {
         Accept: "text/html,application/xhtml+xml",
         "User-Agent":
@@ -86,7 +167,8 @@ async function fetchHtmlTextFromUrl(url: string): Promise<string> {
     if (!contentType.includes("text/html")) return "";
 
     const html = await response.text();
-    return extractFullTextFromHtml(html);
+    const extracted = extractFullTextFromHtml(html);
+    return extracted.length >= 400 ? extracted : "";
   } catch (error) {
     console.error("HTML fetch error:", error);
     return "";
@@ -96,7 +178,7 @@ async function fetchHtmlTextFromUrl(url: string): Promise<string> {
 async function resolveDoiLandingUrl(doi: string): Promise<string> {
   if (!doi) return "";
   try {
-    const response = await fetch(`https://doi.org/${doi}`, {
+    const response = await fetchWithTimeout(`https://doi.org/${doi}`, {
       headers: { Accept: "text/html,application/xhtml+xml" },
       redirect: "follow",
     });
@@ -112,7 +194,7 @@ async function fetchPubMedFullText(pmid: string): Promise<{ text: string; doi: s
   if (!pmid) return { text: "", doi: "", pmcid: "" };
   try {
     const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${pmid}&rettype=xml`;
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url, undefined, 9000);
     if (!response.ok) {
       console.error("PubMed fetch failed:", response.status, response.statusText);
       return { text: "", doi: "", pmcid: "" };
@@ -219,52 +301,21 @@ export async function POST(req: NextRequest) {
       fullText = pubmed.text || fullText;
     }
 
-    if (!fullText) {
-      return NextResponse.json(
-        { error: "No article text found to summarize" },
-        { status: 422 }
-      );
+    const summaryInput = fullText || abstract || title;
+    if (!summaryInput) {
+      return NextResponse.json({ error: "No article text found to summarize" }, { status: 400 });
     }
 
-    // Call Groq for summarization
-    const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${groqApiKey}`,
-      },
-      body: JSON.stringify({
-        model: "mixtral-8x7b-32768",
-        messages: [
-          {
-            role: "user",
-            content: `Summarize this research paper in 2-3 concise sentences.\nPrioritize key findings, sample/study design, and clinical relevance.\n\nTitle: ${title || "Untitled"}\n\nContent: ${fullText.substring(0, 12000)}`,
-          },
-        ],
-        max_tokens: 200,
-        temperature: 0.7,
-      }),
-    });
+    const prompt = `Summarize this research paper in 2-3 concise sentences.\nPrioritize key findings, sample/study design, and clinical relevance.\n\nTitle: ${
+      title || "Untitled"
+    }\n\nContent: ${summaryInput.substring(0, 10000)}`;
 
-    const rawGroq = await groqResponse.text();
-    const parsedGroq = safeJsonParse(rawGroq);
-    const groqData = parsedGroq && typeof parsedGroq === "object" ? (parsedGroq as Record<string, unknown>) : {};
-
-    if (!groqResponse.ok) {
-      console.error("Groq API error:", groqResponse.status, groqResponse.statusText, rawGroq.slice(0, 500));
-      return NextResponse.json({ error: "Failed to generate summary" }, { status: 502 });
+    const groqResult = await generateSummaryWithGroq(groqApiKey, prompt);
+    if (!groqResult.summary) {
+      return NextResponse.json({ error: "Failed to generate summary" }, { status: groqResult.status });
     }
 
-    const choices = Array.isArray(groqData.choices) ? groqData.choices : [];
-    const firstChoice = (choices[0] ?? {}) as { message?: { content?: unknown } };
-    const generatedSummary = asString(firstChoice.message?.content).trim();
-
-    if (!generatedSummary) {
-      console.error("Groq response missing summary content:", rawGroq.slice(0, 500));
-      return NextResponse.json({ error: "Failed to generate summary" }, { status: 500 });
-    }
-
-    return NextResponse.json({ summary: generatedSummary });
+    return NextResponse.json({ summary: groqResult.summary });
   } catch (error) {
     console.error("Summarization error:", error);
     return NextResponse.json({ error: "Failed to summarize" }, { status: 500 });
