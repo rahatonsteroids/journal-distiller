@@ -37,6 +37,10 @@ export default function ArticleCard({
         body: JSON.stringify({
           title: article.title,
           abstract: article.originalAbstract,
+          url: article.url,
+          journal: article.journalName,
+          doi: article.doi,
+          pmid: article.pmid,
         }),
       });
       const data = await res.json();
