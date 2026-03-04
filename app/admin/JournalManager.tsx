@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Journal {
@@ -10,48 +10,75 @@ interface Journal {
 }
 
 export default function JournalManager({ journals: initialJournals }: { journals: Journal[] }) {
-  const [journals, setJournals] = useState(initialJournals);
-
+  const [journals, setJournals] = useState<Journal[]>(initialJournals);
+  const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
-
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editUrl, setEditUrl] = useState("");
-
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  // ---------------- ADD ----------------
+  // Fetch journals on mount
+  useEffect(() => {
+    async function fetchJournals() {
+      try {
+        const res = await fetch("/api/journals");
+        if (res.ok) {
+          const data = await res.json();
+          setJournals(data);
+        }
+      } catch (error) {
+        console.error("Error fetching journals:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchJournals();
+  }, []);
 
   async function addJournal() {
     if (!name || !url) return;
 
-    const res = await fetch("/api/journals", {
-      method: "POST",
-      body: JSON.stringify({ name, url }),
-    });
+    try {
+      const res = await fetch("/api/journals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, url }),
+      });
 
-    const newJournal = await res.json();
-
-    setJournals([newJournal, ...journals]);
-    setName("");
-    setUrl("");
+      if (res.ok) {
+        const newJournal = await res.json();
+        setJournals([newJournal, ...journals]);
+        setName("");
+        setUrl("");
+      } else {
+        const error = await res.json();
+        alert("Error adding journal: " + error.error);
+      }
+    } catch (error) {
+      alert("Error: " + String(error));
+    }
   }
-
-  // ---------------- CONFIRM DELETE ----------------
 
   async function confirmDelete() {
     if (!deleteId) return;
 
-    await fetch(`/api/journals/${deleteId}`, {
-      method: "DELETE",
-    });
+    try {
+      const res = await fetch(`/api/journals/${deleteId}`, {
+        method: "DELETE",
+      });
 
-    setJournals(journals.filter((j) => j.id !== deleteId));
-    setDeleteId(null);
+      if (res.ok) {
+        setJournals(journals.filter((j) => j.id !== deleteId));
+        setDeleteId(null);
+      } else {
+        alert("Error deleting journal");
+      }
+    } catch (error) {
+      alert("Error: " + String(error));
+    }
   }
-
-  // ---------------- EDIT ----------------
 
   function startEdit(journal: Journal) {
     setEditingId(journal.id);
@@ -66,32 +93,33 @@ export default function JournalManager({ journals: initialJournals }: { journals
   }
 
   async function saveEdit(id: number) {
-    const res = await fetch(`/api/journals/${id}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        name: editName,
-        url: editUrl,
-      }),
-    });
+    try {
+      const res = await fetch(`/api/journals/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editName, url: editUrl }),
+      });
 
-    const updated = await res.json();
-
-    setJournals(
-      journals.map((j) => (j.id === id ? updated : j))
-    );
-
-    cancelEdit();
+      if (res.ok) {
+        const updated = await res.json();
+        setJournals(journals.map((j) => (j.id === id ? updated : j)));
+        cancelEdit();
+      } else {
+        alert("Error updating journal");
+      }
+    } catch (error) {
+      alert("Error: " + String(error));
+    }
   }
+
+  if (loading) return <div className="text-zinc-400">Loading journals...</div>;
 
   return (
     <div className="space-y-16">
-
-      {/* ADD SECTION */}
       <div>
         <h2 className="text-zinc-400 uppercase tracking-widest text-sm mb-6">
           Manage Journals
         </h2>
-
         <div className="flex gap-10 items-end">
           <div>
             <label className="block text-xs uppercase tracking-wider text-zinc-500 mb-2">
@@ -101,9 +129,9 @@ export default function JournalManager({ journals: initialJournals }: { journals
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="bg-transparent border-b border-zinc-700 focus:outline-none w-64 py-2"
+              placeholder="e.g., The Lancet"
             />
           </div>
-
           <div>
             <label className="block text-xs uppercase tracking-wider text-zinc-500 mb-2">
               Journal URL
@@ -112,9 +140,9 @@ export default function JournalManager({ journals: initialJournals }: { journals
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               className="bg-transparent border-b border-zinc-700 focus:outline-none w-64 py-2"
+              placeholder="e.g., https://www.thelancet.com/"
             />
           </div>
-
           <button
             onClick={addJournal}
             className="text-yellow-500 hover:text-yellow-400 uppercase tracking-wider text-sm"
@@ -124,9 +152,7 @@ export default function JournalManager({ journals: initialJournals }: { journals
         </div>
       </div>
 
-      {/* LIST */}
       <div className="space-y-6">
-
         <AnimatePresence>
           {journals.map((journal) => (
             <motion.div
@@ -144,20 +170,17 @@ export default function JournalManager({ journals: initialJournals }: { journals
                     onChange={(e) => setEditName(e.target.value)}
                     className="bg-transparent border-b border-zinc-700 focus:outline-none py-1 w-48"
                   />
-
                   <input
                     value={editUrl}
                     onChange={(e) => setEditUrl(e.target.value)}
                     className="bg-transparent border-b border-zinc-700 focus:outline-none py-1 w-64"
                   />
-
                   <button
                     onClick={() => saveEdit(journal.id)}
                     className="text-green-500 uppercase text-xs"
                   >
                     Save
                   </button>
-
                   <button
                     onClick={cancelEdit}
                     className="text-zinc-500 uppercase text-xs"
@@ -168,14 +191,9 @@ export default function JournalManager({ journals: initialJournals }: { journals
               ) : (
                 <>
                   <div>
-                    <h3 className="text-xl font-medium">
-                      {journal.name}
-                    </h3>
-                    <p className="text-zinc-500 text-sm">
-                      {journal.url}
-                    </p>
+                    <h3 className="text-xl font-medium">{journal.name}</h3>
+                    <p className="text-zinc-500 text-sm">{journal.url}</p>
                   </div>
-
                   <div className="flex gap-6">
                     <button
                       onClick={() => startEdit(journal)}
@@ -183,7 +201,6 @@ export default function JournalManager({ journals: initialJournals }: { journals
                     >
                       Edit
                     </button>
-
                     <button
                       onClick={() => setDeleteId(journal.id)}
                       className="text-red-500 uppercase tracking-wider text-sm"
@@ -196,10 +213,8 @@ export default function JournalManager({ journals: initialJournals }: { journals
             </motion.div>
           ))}
         </AnimatePresence>
-
       </div>
 
-      {/* DELETE MODAL */}
       <AnimatePresence>
         {deleteId && (
           <motion.div
@@ -214,10 +229,7 @@ export default function JournalManager({ journals: initialJournals }: { journals
               animate={{ scale: 1 }}
               exit={{ scale: 0.9 }}
             >
-              <h3 className="text-lg mb-4">
-                Are you sure you want to delete this journal?
-              </h3>
-
+              <h3 className="text-lg mb-4">Delete this journal?</h3>
               <div className="flex justify-end gap-6 mt-6">
                 <button
                   onClick={() => setDeleteId(null)}
@@ -225,7 +237,6 @@ export default function JournalManager({ journals: initialJournals }: { journals
                 >
                   Cancel
                 </button>
-
                 <button
                   onClick={confirmDelete}
                   className="text-red-500 uppercase text-xs"
@@ -237,7 +248,6 @@ export default function JournalManager({ journals: initialJournals }: { journals
           </motion.div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }
