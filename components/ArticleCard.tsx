@@ -63,7 +63,9 @@ export default function ArticleCard({
       <div className="ac-top-bar" />
       <div className="ac-body">
         <div className="ac-journal">{article.journalName}</div>
-        <h2 className="ac-title">{article.title}</h2>
+        <a href={`/article/${article.id}`} className="ac-title" style={{ textDecoration: "none", color: "inherit" }}>
+          {article.title}
+        </a>
         <p className="ac-abstract">{article.originalAbstract}</p>
 
         {summary && (
@@ -95,8 +97,8 @@ export default function ArticleCard({
       <div className="ac-footer">
         <span className="ac-date">{formattedDate}</span>
         <SaveButton articleId={article.id} />
-        <a href={article.url} target="_blank" rel="noopener noreferrer" className="ac-link">
-          Read Paper &#8594;
+        <a href={`/article/${article.id}`} className="ac-link">
+          View Details &#8594;
         </a>
       </div>
     </div>
