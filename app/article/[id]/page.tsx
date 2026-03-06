@@ -7,7 +7,8 @@ export default async function ArticleDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
+  const resolvedParams = await params;
+  const id = resolvedParams.id;
 
   const sql = getDb();
 
