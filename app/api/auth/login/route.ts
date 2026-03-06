@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
 
     // Find user
     const users = await sql`
-      SELECT * FROM users WHERE email = ${email}
+      SELECT id, password FROM users WHERE email = ${email}
     `;
 
     if (users.length === 0) {
@@ -39,11 +39,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create session/token
-    const response = NextResponse.json({ success: true });
+    // Create response with cookie
+    const response = NextResponse.json({
+      success: true,
+      userId: user.id
+    });
+
     response.cookies.set("user_id", String(user.id), {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 30, // 30 days
     });

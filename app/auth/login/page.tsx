@@ -23,14 +23,20 @@ function LoginForm() {
         body: JSON.stringify({ email, password }),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
-        router.push("/profile");
+        // Wait a moment for cookie to be set, then redirect
+        setTimeout(() => {
+          router.push("/profile");
+          router.refresh();
+        }, 100);
       } else {
-        const data = await res.json();
         setError(data.error || "Login failed");
       }
     } catch (err) {
       setError("An error occurred");
+      console.error(err);
     } finally {
       setLoading(false);
     }

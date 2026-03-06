@@ -21,7 +21,15 @@ export default function ProfilePage() {
   useEffect(() => {
     async function fetchProfile() {
       try {
-        const res = await fetch("/api/profile");
+        const res = await fetch("/api/profile", {
+          credentials: "include",
+        });
+        
+        if (res.status === 401) {
+          router.push("/auth/login");
+          return;
+        }
+
         if (!res.ok) {
           router.push("/auth/login");
           return;
@@ -29,12 +37,11 @@ export default function ProfilePage() {
 
         const data = await res.json();
         setEmail(data.email);
-        setSavedArticles(data.savedArticles);
+        setSavedArticles(data.savedArticles || []);
+        setLoading(false);
       } catch (error) {
         console.error("Error fetching profile:", error);
         router.push("/auth/login");
-      } finally {
-        setLoading(false);
       }
     }
 
