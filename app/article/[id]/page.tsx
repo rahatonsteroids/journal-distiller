@@ -14,7 +14,7 @@ export default async function ArticleDetailPage({
 
   try {
     const articles = await sql`
-      SELECT * FROM "Article" WHERE id = ${parseInt(id)}
+      SELECT * FROM "Article" WHERE id = ${id}
     `;
 
     if (articles.length === 0) {
