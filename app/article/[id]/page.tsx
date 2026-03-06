@@ -1,10 +1,10 @@
-import { getDb } from "@/lib/prisma";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getDb } from "@/lib/prisma";
 import SaveButton from "@/components/SaveButton";
 
 function cleanXMLContent(text: string): string {
   if (!text) return "";
-  // Remove XML tags like <sec>, <st>, <p>, </p>, etc.
   return text
     .replace(/<[^>]*>/g, "")
     .replace(/&rsquo;/g, "'")
@@ -20,132 +20,137 @@ export default async function ArticleDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const resolvedParams = await params;
-  const id = resolvedParams.id;
-
+  const { id } = await params;
   const sql = getDb();
 
   try {
-    const articles = await sql`
-      SELECT * FROM "Article" WHERE id = ${id}
+    const rows = await sql`
+      SELECT 
+        a.id,
+        a.title,
+        a."journalName",
+        a."publishedAt",
+        a.authors,
+        a.doi,
+        a.url,
+        a."originalAbstract",
+        s."bottomLine",
+        s.methodology,
+        s."clinicalImpact"
+      FROM "Article" a
+      LEFT JOIN "Summary" s ON s."articleId" = a.id
+      WHERE a.id = ${id}
+      LIMIT 1
     `;
 
-    if (articles.length === 0) {
+    if (rows.length === 0) {
       notFound();
     }
 
-    const article = articles[0];
+    const article = rows[0];
+    const authors = Array.isArray(article.authors)
+      ? article.authors.join(", ")
+      : String(article.authors ?? "");
 
     return (
-      <div className="min-h-screen bg-zinc-950 text-white">
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&family=Outfit:wght@200;300;400;500&display=swap');
-          
-          body { background: #080807; color: #f0ebe0; font-family: 'Outfit', sans-serif; }
-          
-          .article-container { max-width: 900px; margin: 0 auto; padding: 3rem 2rem; }
-          .article-header { margin-bottom: 3rem; padding-bottom: 2rem; border-bottom: 1px solid #1e1c18; }
-          .article-journal { font-size: 0.75rem; letter-spacing: 0.2em; text-transform: uppercase; color: #c8a96e; margin-bottom: 1rem; }
-          .article-title { font-family: 'Cormorant Garamond', serif; font-size: 2.5rem; font-weight: 600; line-height: 1.2; color: #f0ebe0; margin-bottom: 1.5rem; }
-          .article-meta { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 2rem; font-size: 0.85rem; color: #a09880; }
-          .article-meta-item { display: flex; flex-direction: column; }
-          .article-meta-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #6b6358; margin-bottom: 0.25rem; }
-          .article-actions { display: flex; gap: 1rem; margin-bottom: 2rem; }
-          .article-content { font-size: 1rem; line-height: 1.8; color: #f0ebe0; }
-          .section { margin-bottom: 2.5rem; }
-          .section-title { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; font-weight: 600; color: #c8a96e; margin-bottom: 1rem; }
-          .section-content { color: #a09880; line-height: 1.8; }
-          .back-link { display: inline-block; margin-bottom: 2rem; color: #c8a96e; text-decoration: none; font-size: 0.9rem; }
-          .back-link:hover { color: #e8c98e; }
-          .button-primary { background: #c8a96e; color: #080807; padding: 0.75rem 1.5rem; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; text-decoration: none; display: inline-block; transition: background 0.2s; }
-          .button-primary:hover { background: #e8c98e; }
-        `}</style>
+      <div className="min-h-screen bg-[#f6f7f8] text-slate-900 dark:bg-[#101822] dark:text-slate-100">
+        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-[#15202e]/90">
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between">
+            <Link href="/" className="flex items-center gap-2 text-slate-700 hover:text-[#136dec] dark:text-slate-300">
+              <span className="material-symbols-outlined">arrow_back</span>
+              <span className="text-sm font-medium">Back</span>
+            </Link>
+            <h1 className="truncate text-lg font-bold">Article Summary</h1>
+            <div className="w-10" />
+          </div>
+        </header>
 
-        <div className="article-container">
-          <a href="/" className="back-link">← Back to articles</a>
-
-          <div className="article-header">
-            <div className="article-journal">{article.journalName}</div>
-            <h1 className="article-title">{article.title}</h1>
-
-            <div className="article-meta">
-              <div className="article-meta-item">
-                <span className="article-meta-label">Published</span>
-                <span>{new Date(article.publishedAt).toLocaleDateString()}</span>
-              </div>
-              {article.authors && (
-                <div className="article-meta-item">
-                  <span className="article-meta-label">Authors</span>
-                  <span>{article.authors}</span>
-                </div>
-              )}
-              {article.pmid && (
-                <div className="article-meta-item">
-                  <span className="article-meta-label">PMID</span>
-                  <span>{article.pmid}</span>
-                </div>
-              )}
+        <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-6 md:pb-10">
+          <div className="mb-6 flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#136dec]">
+              <span className="material-symbols-outlined text-[16px]">menu_book</span>
+              {article.journalName}
             </div>
-
-            <div className="article-actions">
-              <SaveButton articleId={article.id} />
-              {article.doi && (
-                <a
-                  href={`https://doi.org/${article.doi}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="button-primary"
-                >
-                  View Original Paper
-                </a>
-              )}
-              {article.pmid && (
-                <a
-                  href={`https://pubmed.ncbi.nlm.nih.gov/${article.pmid}/`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="button-primary"
-                >
-                  PubMed Link
-                </a>
-              )}
+            <h2 className="text-2xl font-bold leading-tight">{article.title}</h2>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
+              {authors && <span>{authors}</span>}
+              <span>{new Date(article.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
             </div>
           </div>
 
-          <div className="article-content">
-            {article.originalAbstract && (
-              <div className="section">
-                <h2 className="section-title">Abstract</h2>
-                <div className="section-content">
-                  {cleanXMLContent(article.originalAbstract)}
-                </div>
-              </div>
-            )}
-
-            {article.aiSummary && (
-              <div className="section">
-                <h2 className="section-title">AI Summary</h2>
-                <div className="section-content">
-                  {cleanXMLContent(article.aiSummary)}
-                </div>
-              </div>
-            )}
-
-            {!article.originalAbstract && !article.aiSummary && (
-              <div className="section">
-                <p className="section-content">
-                  Full article details available at the source.
-                </p>
-              </div>
-            )}
-
-            <div className="section">
-              <h2 className="section-title">Citation</h2>
-              <div className="section-content" style={{ fontFamily: "monospace", fontSize: "0.9rem" }}>
-                {article.journalName}. {new Date(article.publishedAt).getFullYear()}. {article.title}
-                {article.authors && ` Authors: ${article.authors}`}
-              </div>
+          <section className="mb-6 rounded-xl border border-[#136dec]/20 bg-white p-5 shadow-sm dark:bg-[#15202e]">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#136dec]">auto_awesome</span>
+              <h3 className="text-lg font-bold">AI Distilled Abstract</h3>
             </div>
+            <p className="leading-relaxed text-slate-700 dark:text-slate-300">
+              {article.bottomLine
+                ? cleanXMLContent(article.bottomLine)
+                : cleanXMLContent(article.originalAbstract)}
+            </p>
+          </section>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-[#15202e]">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#136dec]">science</span>
+                <h3 className="text-lg font-bold">Methodology</h3>
+              </div>
+              <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                {article.methodology
+                  ? cleanXMLContent(article.methodology)
+                  : "Methodology details were not available for this article."}
+              </p>
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-[#15202e]">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#136dec]">medical_services</span>
+                <h3 className="text-lg font-bold">Clinical Implications</h3>
+              </div>
+              <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                {article.clinicalImpact
+                  ? cleanXMLContent(article.clinicalImpact)
+                  : "Clinical implications are not available for this article yet."}
+              </p>
+            </section>
+          </div>
+
+          <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-[#15202e]">
+            <h3 className="mb-3 text-lg font-bold">Original Abstract</h3>
+            <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+              {article.originalAbstract
+                ? cleanXMLContent(article.originalAbstract)
+                : "No abstract available."}
+            </p>
+          </section>
+        </main>
+
+        <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white/95 px-4 pb-6 pt-3 backdrop-blur dark:border-slate-800 dark:bg-[#15202e]/95">
+          <div className="mx-auto flex w-full max-w-5xl gap-2">
+            <div className="flex-1">
+              <SaveButton articleId={article.id} />
+            </div>
+            {article.url && (
+              <a
+                href={article.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              >
+                View Paper
+              </a>
+            )}
+            {article.doi && (
+              <a
+                href={`https://doi.org/${article.doi}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-1 items-center justify-center rounded-xl bg-[#136dec] px-4 py-2.5 text-sm font-semibold text-white"
+              >
+                DOI
+              </a>
+            )}
           </div>
         </div>
       </div>

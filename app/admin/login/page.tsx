@@ -28,17 +28,18 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white">
+    <div className="min-h-screen flex items-center justify-center bg-[#f6f7f8] px-4 text-slate-900">
       <form
         onSubmit={handleLogin}
-        className="bg-zinc-900 p-10 rounded-lg border border-zinc-800 w-96"
+        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"
       >
-        <h1 className="text-2xl mb-6">Admin Login</h1>
+        <h1 className="mb-2 text-2xl font-bold">Admin Login</h1>
+        <p className="mb-6 text-sm text-slate-500">Sign in to manage journals and scraping sources.</p>
 
         <input
           type="email"
           placeholder="Email"
-          className="w-full mb-4 p-2 bg-zinc-800 border border-zinc-700 rounded"
+          className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-[#136dec]"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
@@ -47,19 +48,17 @@ export default function AdminLoginPage() {
         <input
           type="password"
           placeholder="Password"
-          className="w-full mb-4 p-2 bg-zinc-800 border border-zinc-700 rounded"
+          className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-[#136dec]"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
         />
 
-        {error && (
-          <p className="text-red-500 text-sm mb-4">{error}</p>
-        )}
+        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
         <button
           type="submit"
-          className="w-full bg-yellow-500 text-black py-2 rounded hover:bg-yellow-400"
+          className="w-full rounded-lg bg-[#136dec] py-2 font-semibold text-white hover:bg-[#0f5dd0]"
         >
           Login
         </button>

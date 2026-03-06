@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function SignupPage() {
         const data = await res.json();
         setError(data.error || "Signup failed");
       }
-    } catch (err) {
+    } catch {
       setError("An error occurred");
     } finally {
       setLoading(false);
@@ -48,17 +49,17 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white">
+    <div className="min-h-screen flex items-center justify-center bg-[#0b2a66] text-white">
       <form
         onSubmit={handleSignup}
-        className="bg-zinc-900 p-10 rounded-lg border border-zinc-800 w-96"
+        className="bg-[#0f347a] p-10 rounded-lg border border-[#2a5fbf] w-96 shadow-xl"
       >
         <h1 className="text-2xl mb-6">Create Account</h1>
 
         <input
           type="email"
           placeholder="Email"
-          className="w-full mb-4 p-2 bg-zinc-800 border border-zinc-700 rounded"
+          className="w-full mb-4 p-2 bg-[#0b2a66] border border-[#2a5fbf] rounded"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
@@ -67,7 +68,7 @@ export default function SignupPage() {
         <input
           type="password"
           placeholder="Password"
-          className="w-full mb-4 p-2 bg-zinc-800 border border-zinc-700 rounded"
+          className="w-full mb-4 p-2 bg-[#0b2a66] border border-[#2a5fbf] rounded"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -76,7 +77,7 @@ export default function SignupPage() {
         <input
           type="password"
           placeholder="Confirm Password"
-          className="w-full mb-4 p-2 bg-zinc-800 border border-zinc-700 rounded"
+          className="w-full mb-4 p-2 bg-[#0b2a66] border border-[#2a5fbf] rounded"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
@@ -92,11 +93,11 @@ export default function SignupPage() {
           {loading ? "Creating..." : "Sign Up"}
         </button>
 
-        <p className="text-sm text-zinc-400 mt-4">
+        <p className="text-sm text-white/80 mt-4">
           Already have an account?{" "}
-          <a href="/auth/login" className="text-yellow-500 hover:text-yellow-400">
+          <Link href="/auth/login" className="text-yellow-300 hover:text-yellow-200">
             Login
-          </a>
+          </Link>
         </p>
       </form>
     </div>

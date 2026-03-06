@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useMemo, useState } from "react";
 
 interface Journal {
   id: number;
@@ -10,59 +9,53 @@ interface Journal {
 }
 
 export default function JournalManager({ journals: initialJournals }: { journals: Journal[] }) {
-  const [journals, setJournals] = useState<Journal[]>(initialJournals);
-  const [loading, setLoading] = useState(true);
+  const [journals, setJournals] = useState<Journal[]>([...initialJournals]);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editUrl, setEditUrl] = useState("");
-  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null); 
 
-  // Fetch journals on mount
-  useEffect(() => {
-    async function fetchJournals() {
-      try {
-        const res = await fetch("/api/journals");
-        if (res.ok) {
-          const data = await res.json();
-          setJournals(data);
-        }
-      } catch (error) {
-        console.error("Error fetching journals:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchJournals();
-  }, []);
+  const deletingJournal = useMemo(
+    () => journals.find((journal) => journal.id === deleteId) ?? null,
+    [deleteId, journals]
+  );
 
   async function addJournal() {
-    if (!name || !url) return;
+    if (!name.trim() || !url.trim()) return;
+    setBusy(true);
+    setError("");
 
     try {
       const res = await fetch("/api/journals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, url }),
+        body: JSON.stringify({ name: name.trim(), url: url.trim() }),
       });
+      const payload = (await res.json()) as { id?: number; name?: string; url?: string; error?: string };
 
-      if (res.ok) {
-        const newJournal = await res.json();
-        setJournals([newJournal, ...journals]);
-        setName("");
-        setUrl("");
-      } else {
-        const error = await res.json();
-        alert("Error adding journal: " + error.error);
+      if (!res.ok || !payload.id) {
+        setError(payload.error || "Failed to add journal.");
+        return;
       }
+
+      setJournals((prev) => [{ id: payload.id!, name: payload.name ?? name.trim(), url: payload.url ?? url.trim() }, ...prev]);
+      setName("");
+      setUrl("");
     } catch (error) {
-      alert("Error: " + String(error));
+      setError(String(error));
+    } finally {
+      setBusy(false);
     }
   }
 
   async function confirmDelete() {
     if (!deleteId) return;
+    setBusy(true);
+    setError("");
 
     try {
       const res = await fetch(`/api/journals/${deleteId}`, {
@@ -70,13 +63,16 @@ export default function JournalManager({ journals: initialJournals }: { journals
       });
 
       if (res.ok) {
-        setJournals(journals.filter((j) => j.id !== deleteId));
+        setJournals((prev) => prev.filter((j) => j.id !== deleteId));
         setDeleteId(null);
       } else {
-        alert("Error deleting journal");
+        const payload = (await res.json()) as { error?: string };
+        setError(payload.error || "Failed to delete journal.");
       }
     } catch (error) {
-      alert("Error: " + String(error));
+      setError(String(error));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -93,161 +89,153 @@ export default function JournalManager({ journals: initialJournals }: { journals
   }
 
   async function saveEdit(id: number) {
+    if (!editName.trim() || !editUrl.trim()) return;
+    setBusy(true);
+    setError("");
+
     try {
       const res = await fetch(`/api/journals/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editName, url: editUrl }),
+        body: JSON.stringify({ name: editName.trim(), url: editUrl.trim() }),
       });
+      const payload = (await res.json()) as { id?: number; name?: string; url?: string; error?: string };
 
-      if (res.ok) {
-        const updated = await res.json();
-        setJournals(journals.map((j) => (j.id === id ? updated : j)));
-        cancelEdit();
-      } else {
-        alert("Error updating journal");
+      if (!res.ok || !payload.id) {
+        setError(payload.error || "Failed to update journal.");
+        return;
       }
+
+      setJournals((prev) =>
+        prev.map((j) =>
+          j.id === id
+            ? { id: payload.id!, name: payload.name ?? editName.trim(), url: payload.url ?? editUrl.trim() }
+            : j
+        )
+      );
+      cancelEdit();
     } catch (error) {
-      alert("Error: " + String(error));
+      setError(String(error));
+    } finally {
+      setBusy(false);
     }
   }
 
-  if (loading) return <div className="text-zinc-400">Loading journals...</div>;
-
   return (
-    <div className="space-y-16">
-      <div>
-        <h2 className="text-zinc-400 uppercase tracking-widest text-sm mb-6">
-          Manage Journals
-        </h2>
-        <div className="flex gap-10 items-end">
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-zinc-500 mb-2">
-              Journal Name
-            </label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="bg-transparent border-b border-zinc-700 focus:outline-none w-64 py-2"
-              placeholder="e.g., The Lancet"
-            />
-          </div>
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-zinc-500 mb-2">
-              Journal URL
-            </label>
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              className="bg-transparent border-b border-zinc-700 focus:outline-none w-64 py-2"
-              placeholder="e.g., https://www.thelancet.com/"
-            />
-          </div>
-          <button
-            onClick={addJournal}
-            className="text-yellow-500 hover:text-yellow-400 uppercase tracking-wider text-sm"
-          >
-            Add
-          </button>
-        </div>
+    <section className="mt-10 rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-bold text-slate-900">Manage Journals</h2>
+        <span className="text-xs font-semibold text-slate-500">{journals.length} journals</span>
       </div>
 
-      <div className="space-y-6">
-        <AnimatePresence>
-          {journals.map((journal) => (
-            <motion.div
-              key={journal.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.25 }}
-              className="border-b border-zinc-800 py-6 flex justify-between items-center"
-            >
-              {editingId === journal.id ? (
-                <div className="flex gap-6 items-center w-full">
-                  <input
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="bg-transparent border-b border-zinc-700 focus:outline-none py-1 w-48"
-                  />
-                  <input
-                    value={editUrl}
-                    onChange={(e) => setEditUrl(e.target.value)}
-                    className="bg-transparent border-b border-zinc-700 focus:outline-none py-1 w-64"
-                  />
-                  <button
-                    onClick={() => saveEdit(journal.id)}
-                    className="text-green-500 uppercase text-xs"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={cancelEdit}
-                    className="text-zinc-500 uppercase text-xs"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div>
-                    <h3 className="text-xl font-medium">{journal.name}</h3>
-                    <p className="text-zinc-500 text-sm">{journal.url}</p>
-                  </div>
-                  <div className="flex gap-6">
-                    <button
-                      onClick={() => startEdit(journal)}
-                      className="text-blue-500 uppercase tracking-wider text-sm"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => setDeleteId(journal.id)}
-                      className="text-red-500 uppercase tracking-wider text-sm"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </>
-              )}
-            </motion.div>
-          ))}
-        </AnimatePresence>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto]">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Journal Name"
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#136dec]"
+        />
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://example.com"
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#136dec]"
+        />
+        <button
+          onClick={addJournal}
+          disabled={busy}
+          className="rounded-lg bg-[#136dec] px-4 py-2 text-sm font-semibold text-white disabled:opacity-70"
+        >
+          {busy ? "Saving..." : "Add Journal"}
+        </button>
       </div>
 
-      <AnimatePresence>
-        {deleteId && (
-          <motion.div
-            className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              className="bg-zinc-900 p-8 rounded-lg w-96 border border-zinc-800"
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-            >
-              <h3 className="text-lg mb-4">Delete this journal?</h3>
-              <div className="flex justify-end gap-6 mt-6">
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+      <div className="mt-5 space-y-2">
+        {journals.map((journal) => (
+          <div key={journal.id} className="rounded-xl border border-slate-200 p-3">
+            {editingId === journal.id ? (
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#136dec]"
+                />
+                <input
+                  value={editUrl}
+                  onChange={(e) => setEditUrl(e.target.value)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#136dec]"
+                />
                 <button
-                  onClick={() => setDeleteId(null)}
-                  className="text-zinc-400 uppercase text-xs"
+                  onClick={() => saveEdit(journal.id)}
+                  disabled={busy}
+                  className="rounded-lg bg-[#136dec] px-3 py-2 text-xs font-semibold text-white disabled:opacity-70"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={cancelEdit}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={confirmDelete}
-                  className="text-red-500 uppercase text-xs"
-                >
-                  Confirm
-                </button>
               </div>
-            </motion.div>
-          </motion.div>
+            ) : (
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-semibold text-slate-900">{journal.name}</p>
+                  <p className="text-xs text-slate-500">{journal.url}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => startEdit(journal)}
+                    className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => setDeleteId(journal.id)}
+                    className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {journals.length === 0 && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+            No journals added yet.
+          </div>
         )}
-      </AnimatePresence>
-    </div>
+      </div>
+
+      {deletingJournal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-bold text-slate-900">Delete journal?</h3>
+            <p className="mt-1 text-sm text-slate-600">{deletingJournal.name}</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteId(null)}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={busy}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-70"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

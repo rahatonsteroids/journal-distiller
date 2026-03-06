@@ -1,60 +1,29 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { Toaster } from "react-hot-toast";
-import "./globals.css";
+import type { Metadata } from 'next';
+import { Manrope } from 'next/font/google';
+import './globals.css';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const manrope = Manrope({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "Journal Distiller",
-  description: "AI-powered journal summarizer",
+  title: 'Journal Distiller',
+  description: 'AI-powered medical journal summaries',
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en">
-      <body
-        className={`
-          ${geistSans.variable}
-          ${geistMono.variable}
-          antialiased
-          bg-zinc-950
-          text-zinc-100
-          min-h-screen
-        `}
-      >
-        {children}
-
-        {/* Toast Notifications */}
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 3000,
-            style: {
-              background: "#18181b",
-              color: "#fff",
-              border: "1px solid #27272a",
-            },
-            success: {
-              iconTheme: {
-                primary: "#22c55e",
-                secondary: "#000",
-              },
-            },
-          }}
+    <html lang="en" className="light">
+      <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+          rel="stylesheet"
         />
+      </head>
+      <body className={`${manrope.className} bg-[#0b2a66]`}>
+        {children}
       </body>
     </html>
   );

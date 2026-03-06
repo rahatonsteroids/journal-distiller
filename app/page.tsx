@@ -1,317 +1,184 @@
-// app/page.tsx
-import { getDb } from "../lib/prisma";
-import ArticleCard from "../components/ArticleCard";
-import { cookies } from "next/headers";
+import Link from "next/link";
+import { getDb } from "@/lib/prisma";
+import SummariseButton from "@/components/SummariseButton";
 
-export const revalidate = 0;
-const PAGE_SIZE = 24;
+type HomeArticle = {
+  id: string;
+  title: string;
+  originalAbstract: string;
+  journalName: string;
+  publishedAt: string | Date;
+  url: string;
+  doi: string | null;
+};
+type JournalRow = {
+  id: number;
+  name: string;
+  url: string;
+};
 
-function EmptyState({ query }: { query: string }) {
-  return (
-    <div style={{ padding: "4rem 2rem", textAlign: "center", border: "1px dashed #2a2520", color: "#6b6358", gridColumn: "1/-1" }}>
-      <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>&#8709;</div>
-      <p style={{ fontSize: "0.9rem" }}>
-        {query ? `No results for "${query}"` : "No articles found."}
-      </p>
-    </div>
-  );
-}
+const PAGE_SIZE = 20;
 
-function ErrorState() {
-  return (
-    <div style={{ padding: "4rem 2rem", textAlign: "center", border: "1px dashed #c8a96e", color: "#c8a96e", gridColumn: "1/-1" }}>
-      <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>!</div>
-      <p style={{ fontSize: "0.9rem" }}>Failed to connect to the database.</p>
-    </div>
-  );
-}
-
-export default async function Home({
+export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; q?: string; journal?: string }>;
+  searchParams?: Promise<{ page?: string }>;
 }) {
-  const params = await searchParams;
-  const cookieStore = await cookies();
-  const currentUser = cookieStore.get("user_id")?.value;
-  const currentPage = Math.max(1, parseInt(params.page ?? "1", 10));
-  const query = params.q?.trim() ?? "";
-  const selectedJournal = params.journal?.trim() ?? "";
+  const sql = getDb();
+  let articles: HomeArticle[] = [];
+  let allJournals: JournalRow[] = [];
+  let totalArticles = 0;
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const currentPage = Math.max(1, Number.parseInt(resolvedSearchParams.page ?? "1", 10) || 1);
   const offset = (currentPage - 1) * PAGE_SIZE;
 
-  let articles: any[] = [];
-  let totalCount = 0;
-  let fetchError = false;
-  let journals: string[] = [];
-
   try {
-    const sql = getDb();
+    const countRows = await sql`SELECT COUNT(*)::int AS count FROM "Article"`;
+    totalArticles = Number(countRows[0]?.count ?? 0);
 
-    const journalRows = await sql`SELECT DISTINCT "journalName" FROM "Article" ORDER BY "journalName" ASC`;
-    journals = journalRows.map((r: any) => r.journalName);
-
-    const hasSearch = !!query;
-    const hasJournal = !!selectedJournal;
-
-    if (hasSearch && hasJournal) {
-      const searchTerm = `%${query}%`;
-      const [rows, countRows] = await Promise.all([
-        sql`
-          SELECT * FROM "Article"
-          WHERE (title ILIKE ${searchTerm} OR "originalAbstract" ILIKE ${searchTerm} OR "journalName" ILIKE ${searchTerm})
-            AND "journalName" = ${selectedJournal}
-          ORDER BY "publishedAt" DESC
-          LIMIT ${PAGE_SIZE} OFFSET ${offset}
-        `,
-        sql`
-          SELECT COUNT(*)::int AS count FROM "Article"
-          WHERE (title ILIKE ${searchTerm} OR "originalAbstract" ILIKE ${searchTerm} OR "journalName" ILIKE ${searchTerm})
-            AND "journalName" = ${selectedJournal}
-        `,
-      ]);
-      articles = rows;
-      totalCount = countRows[0].count;
-    } else if (hasSearch) {
-      const searchTerm = `%${query}%`;
-      const [rows, countRows] = await Promise.all([
-        sql`
-          SELECT * FROM "Article"
-          WHERE title ILIKE ${searchTerm} OR "originalAbstract" ILIKE ${searchTerm} OR "journalName" ILIKE ${searchTerm}
-          ORDER BY "publishedAt" DESC
-          LIMIT ${PAGE_SIZE} OFFSET ${offset}
-        `,
-        sql`SELECT COUNT(*)::int AS count FROM "Article" WHERE title ILIKE ${searchTerm} OR "originalAbstract" ILIKE ${searchTerm} OR "journalName" ILIKE ${searchTerm}`,
-      ]);
-      articles = rows;
-      totalCount = countRows[0].count;
-    } else if (hasJournal) {
-      const [rows, countRows] = await Promise.all([
-        sql`SELECT * FROM "Article" WHERE "journalName" = ${selectedJournal} ORDER BY "publishedAt" DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
-        sql`SELECT COUNT(*)::int AS count FROM "Article" WHERE "journalName" = ${selectedJournal}`,
-      ]);
-      articles = rows;
-      totalCount = countRows[0].count;
-    } else {
-      const [rows, countRows] = await Promise.all([
-        sql`SELECT * FROM "Article" ORDER BY "publishedAt" DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
-        sql`SELECT COUNT(*)::int AS count FROM "Article"`,
-      ]);
-      articles = rows;
-      totalCount = countRows[0].count;
-    }
+    const [rows, journalRows] = await Promise.all([
+      sql`
+      SELECT id, title, "originalAbstract", "journalName", "publishedAt", url, doi
+      FROM "Article"
+      ORDER BY "publishedAt" DESC
+      LIMIT ${PAGE_SIZE}
+      OFFSET ${offset}
+    `,
+      sql`
+      SELECT id, name, url
+      FROM journals
+      ORDER BY id DESC
+      `,
+    ]);
+    articles = rows as HomeArticle[];
+    allJournals = journalRows as JournalRow[];
   } catch (error) {
-    console.error("Database connection error:", error);
-    fetchError = true;
+    console.error("Home article query error:", error);
   }
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-
-  const today = new Date().toLocaleDateString("en-US", {
-    weekday: "long", month: "long", day: "numeric", year: "numeric",
-  });
-
-  function buildUrl(overrides: { page?: number; q?: string; journal?: string }) {
-    const p = overrides.page ?? currentPage;
-    const q2 = overrides.q !== undefined ? overrides.q : query;
-    const j = overrides.journal !== undefined ? overrides.journal : selectedJournal;
-    const parts: string[] = [];
-    if (p > 1) parts.push(`page=${p}`);
-    if (q2) parts.push(`q=${encodeURIComponent(q2)}`);
-    if (j) parts.push(`journal=${encodeURIComponent(j)}`);
-    return parts.length ? `/?${parts.join("&")}` : "/";
-  }
+  const hasMore = currentPage * PAGE_SIZE < totalArticles;
+  const hasPrevious = currentPage > 1;
+  const journals = allJournals.slice(0, 8);
 
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&family=Outfit:wght@200;300;400;500&display=swap');
-        :root { --bg: #080807; --border: #1e1c18; --gold: #c8a96e; --ink: #f0ebe0; --ink-mid: #a09880; --ink-dim: #4a4540; --ink-faint: #2a2520; }
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html { scroll-behavior: smooth; }
-        body { background: var(--bg); color: var(--ink); font-family: 'Outfit', sans-serif; font-weight: 300; min-height: 100vh; }
-        body::before { content: ''; position: fixed; inset: 0; background-image: radial-gradient(ellipse 80% 50% at 20% -10%, rgba(200,169,110,0.07) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 80% 110%, rgba(200,169,110,0.04) 0%, transparent 60%); pointer-events: none; z-index: 0; }
-        .nav { position: sticky; top: 0; z-index: 100; background: rgba(8,8,7,0.88); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
-        .nav-inner { max-width: 1200px; margin: 0 auto; padding: 0 2rem; height: 60px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-        .nav-brand { display: flex; align-items: baseline; gap: 0.4rem; text-decoration: none; flex-shrink: 0; }
-        .nav-brand-name { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; font-weight: 700; font-style: italic; color: var(--ink); letter-spacing: 0.02em; }
-        .nav-brand-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); display: inline-block; margin-bottom: 2px; flex-shrink: 0; }
-        .nav-right { display: flex; align-items: center; gap: 1rem; }
-        .nav-date { font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim); }
-        .nav-pill { font-size: 0.62rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); border: 1px solid var(--ink-faint); padding: 4px 12px; white-space: nowrap; flex-shrink: 0; }
-        .journal-select-wrap { position: relative; flex-shrink: 0; }
-        .journal-select { appearance: none; background: #0f0f0e; border: 1px solid var(--ink-faint); color: var(--gold); font-family: 'Outfit', sans-serif; font-size: 0.62rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; padding: 5px 28px 5px 12px; cursor: pointer; outline: none; transition: border-color 0.2s ease; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
-        .journal-select:hover, .journal-select:focus { border-color: var(--gold); }
-        .journal-select option { background: #0f0f0e; color: var(--ink); text-transform: none; font-size: 0.8rem; letter-spacing: 0; }
-        .journal-select-arrow { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--gold); font-size: 0.6rem; }
-        .hero { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 5rem 2rem 0; }
-        .hero-rule-gold { border: none; border-top: 2px solid var(--gold); width: 48px; margin-bottom: 2rem; }
-        .hero-label { font-size: 0.62rem; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold); margin-bottom: 1.25rem; }
-        .hero-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(3rem, 7vw, 6.5rem); font-weight: 300; line-height: 0.92; letter-spacing: -0.02em; color: var(--ink); margin-bottom: 2rem; }
-        .hero-title em { font-style: italic; font-weight: 300; color: var(--ink-mid); }
-        .hero-bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 2rem; padding-bottom: 3rem; border-bottom: 1px solid var(--border); }
-        .hero-desc { font-size: 0.8rem; line-height: 1.8; color: var(--ink-mid); font-weight: 300; max-width: 380px; }
-        .hero-stat { text-align: right; flex-shrink: 0; }
-        .hero-stat-num { font-family: 'Cormorant Garamond', serif; font-size: 3.5rem; font-weight: 300; line-height: 1; color: var(--ink); letter-spacing: -0.04em; }
-        .hero-stat-label { font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-dim); margin-top: 0.25rem; }
-        .search-section { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 2.5rem 2rem 0; }
-        .search-form { display: flex; align-items: stretch; border: 1px solid var(--border); transition: border-color 0.2s ease; }
-        .search-form:focus-within { border-color: var(--gold); }
-        .search-input { flex: 1; background: #0f0f0e; border: none; outline: none; padding: 0.875rem 1.25rem; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 300; color: var(--ink); letter-spacing: 0.02em; }
-        .search-input::placeholder { color: var(--ink-dim); }
-        .search-btn { background: transparent; border: none; border-left: 1px solid var(--border); padding: 0.875rem 1.5rem; cursor: pointer; font-family: 'Outfit', sans-serif; font-size: 0.62rem; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); transition: background 0.2s ease; white-space: nowrap; }
-        .search-btn:hover { background: rgba(200,169,110,0.08); }
-        .search-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem; }
-        .search-results-label { font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
-        .search-results-label strong { color: var(--gold); font-weight: 500; }
-        .search-clear { font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); text-decoration: none; transition: color 0.2s ease; }
-        .search-clear:hover { color: var(--gold); }
-        .journal-badge { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.6rem; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); border: 1px solid var(--gold); padding: 3px 10px; background: rgba(200,169,110,0.06); }
-        .journal-badge a { color: var(--ink-dim); text-decoration: none; font-size: 0.65rem; transition: color 0.2s; }
-        .journal-badge a:hover { color: var(--gold); }
-        .section-divider { max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
-        .section-divider-bar { display: flex; align-items: center; gap: 1rem; padding: 1rem 0; }
-        .section-divider-label { font-size: 0.58rem; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; }
-        .section-divider-line { flex: 1; height: 1px; background: var(--border); }
-        .grid-section { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 2.5rem 2rem 4rem; }
-        .articles-grid { display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); }
-        @media (min-width: 680px) { .articles-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (min-width: 1024px) { .articles-grid { grid-template-columns: repeat(3, 1fr); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .articles-grid > * { animation: fadeUp 0.5s ease both; }
-        .ac-card { font-family: 'Outfit', sans-serif; position: relative; background: #0f0f0e; overflow: hidden; transition: background 0.3s ease, box-shadow 0.3s ease; display: flex; flex-direction: column; height: 100%; }
-        .ac-card:hover { background: #141412; }
-        .ac-body { padding: 1.5rem 1.75rem 1.25rem; flex: 1; display: flex; flex-direction: column; }
-        .ac-journal { font-size: 0.6rem; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: #c8a96e; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.6rem; }
-        .ac-title { font-family: 'Cormorant Garamond', serif; font-size: 1.15rem; font-weight: 600; line-height: 1.35; color: #f0ebe0; margin-bottom: 0.875rem; flex: 1; }
-        .ac-abstract { font-size: 0.78rem; line-height: 1.75; color: #6b6358; font-weight: 300; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 1.25rem; }
-        .ac-footer { display: flex; justify-content: space-between; align-items: center; padding: 0.875rem 1.75rem; border-top: 1px solid #1e1b17; }
-        .ac-date { font-size: 0.65rem; font-weight: 400; letter-spacing: 0.06em; color: #4a4540; }
-        .ac-link { font-size: 0.65rem; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; color: #c8a96e; text-decoration: none; display: flex; align-items: center; gap: 0.4rem; transition: gap 0.2s ease, color 0.2s ease; }
-        .ac-link:hover { color: #e8c98e; gap: 0.7rem; }
-        .pagination { max-width: 1200px; margin: 0 auto; padding: 2rem 2rem 6rem; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); }
-        .pagination-info { font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
-        .pagination-controls { display: flex; align-items: center; gap: 1rem; }
-        .pagination-btn { font-family: 'Outfit', sans-serif; font-size: 0.65rem; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); text-decoration: none; border: 1px solid var(--ink-faint); padding: 8px 20px; transition: border-color 0.2s ease, background 0.2s ease; display: inline-block; }
-        .pagination-btn:hover { border-color: var(--gold); background: rgba(200,169,110,0.06); }
-        .pagination-btn.disabled { color: var(--ink-faint); border-color: var(--ink-faint); pointer-events: none; opacity: 0.4; }
-        .pagination-pages { display: flex; align-items: center; gap: 0.5rem; }
-        .pagination-page { font-size: 0.65rem; font-weight: 500; letter-spacing: 0.1em; color: var(--ink-dim); text-decoration: none; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 1px solid transparent; transition: border-color 0.2s ease, color 0.2s ease; }
-        .pagination-page:hover { color: var(--gold); border-color: var(--ink-faint); }
-        .pagination-page.active { color: var(--gold); border-color: var(--gold); background: rgba(200,169,110,0.06); }
-        .pagination-ellipsis { color: var(--ink-faint); font-size: 0.65rem; padding: 0 4px; }
-        .footer { position: relative; z-index: 1; border-top: 1px solid var(--border); }
-        .footer-inner { max-width: 1200px; margin: 0 auto; padding: 2rem; display: flex; align-items: center; justify-content: space-between; }
-        .footer-brand { font-family: 'Cormorant Garamond', serif; font-size: 1rem; font-weight: 700; font-style: italic; color: var(--ink-dim); }
-        .footer-copy { font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
-        .footer-disclaimer { max-width: 1200px; margin: 0 auto; padding: 0 2rem 1.5rem; font-size: 0.58rem; line-height: 1.8; color: var(--ink-faint); letter-spacing: 0.04em; border-top: 1px solid #111; }
-      `}</style>
-
-      <nav className="nav">
-        <div className="nav-inner">
-          <a href="/" className="nav-brand">
-            <span className="nav-brand-name">Bite&#8209;Sized Club</span>
-            <span className="nav-brand-dot" />
-          </a>
-          <div className="nav-right">
-            <span className="nav-date">{today}</span>
-            {!currentUser && (
-              <div className="flex gap-2">
-                <a href="/auth/login" className="nav-pill">Login</a>
-                <a href="/auth/signup" className="nav-pill">Sign Up</a>
-              </div>
-            )}
-            {currentUser && (
-              <a href="/profile" className="nav-pill">Profile</a>
-            )}
-            {!fetchError && journals.length > 0 && (
-              <div className="journal-select-wrap">
-                <select className="journal-select" defaultValue={selectedJournal} id="journal-select" name="journal">
-                  <option value="">All Journals</option>
-                  {journals.map((j) => (<option key={j} value={j}>{j}</option>))}
-                </select>
-                <span className="journal-select-arrow">&#9660;</span>
-                <script dangerouslySetInnerHTML={{ __html: `document.getElementById('journal-select').addEventListener('change', function() { const val = this.value; const url = new URL(window.location.href); url.searchParams.delete('page'); if (val) { url.searchParams.set('journal', val); } else { url.searchParams.delete('journal'); } window.location.href = url.toString(); });` }} />
-              </div>
-            )}
-            {!fetchError && (<span className="nav-pill">{totalCount} Articles</span>)}
-          </div>
-        </div>
-      </nav>
-
-      <header className="hero">
-        <div className="hero-rule-gold" />
-        <p className="hero-label">Medical Research Feed</p>
-        <h1 className="hero-title">Recent<br /><em>Publications</em></h1>
-        <div className="hero-bottom">
-          <p className="hero-desc">Automated feed of high-impact open access medical research, curated from leading peer-reviewed journals.</p>
-          {!fetchError && totalCount > 0 && (<div className="hero-stat"><div className="hero-stat-num">{totalCount}</div><div className="hero-stat-label">{selectedJournal ? "In Journal" : query ? "Results Found" : "Total Papers"}</div></div>)}
-        </div>
+    <div className="min-h-screen bg-[#0b2a66] text-white">
+      <header className="flex items-center justify-between p-4 pb-2 pt-10">
+        <h1 className="text-xl font-bold tracking-tight">Journal Distiller</h1>
+        <Link href="/admin" className="rounded-md bg-white/15 px-3 py-1.5 text-xs font-semibold">
+          Admin
+        </Link>
       </header>
 
-      <div className="search-section">
-        <form method="GET" action="/" className="search-form">
-          {selectedJournal && <input type="hidden" name="journal" value={selectedJournal} />}
-          <input className="search-input" type="text" name="q" defaultValue={query} placeholder="Search by title, abstract, or journal..." autoComplete="off" />
-          <button type="submit" className="search-btn">Search</button>
-        </form>
-        {(query || selectedJournal) && (
-          <div className="search-meta">
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-              {query && (<p className="search-results-label"><strong>{totalCount}</strong> result{totalCount !== 1 ? "s" : ""} for <strong>&ldquo;{query}&rdquo;</strong></p>)}
-              {selectedJournal && (<span className="journal-badge">{selectedJournal}<a href={query ? `/?q=${encodeURIComponent(query)}` : "/"}>&#10005;</a></span>)}
+      <section className="mt-4">
+        <div className="mb-2 flex items-center justify-between px-4">
+          <h2 className="text-base font-bold">Journals</h2>
+          <Link href="/journals" className="text-sm font-medium text-white/90 hover:underline">
+            View All
+          </Link>
+        </div>
+        <div className="scrollbar-hide flex snap-x gap-3 overflow-x-auto px-4 pb-4 pt-1">
+          {journals.length > 0 ? (
+            journals.map((journal) => (
+              <span
+                key={journal.id}
+                className="inline-flex min-w-fit snap-start items-center rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium"
+              >
+                {journal.name}
+              </span>
+            ))
+          ) : (
+            <span className="text-sm text-white/75">No journals found yet.</span>
+          )}
+        </div>
+      </section>
+
+      <section className="mt-2 px-4 pb-24">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-bold">Latest Articles</h2>
+          <span className="text-xs text-white/80">{totalArticles} total</span>
+        </div>
+        <div className="flex flex-col gap-4">
+          {articles.map((article) => (
+            <article key={article.id} className="flex flex-col gap-3 rounded-xl border border-white/60 bg-white p-4 shadow-sm">
+              <h3 className="line-clamp-2 text-sm font-semibold leading-tight text-slate-900">{article.title}</h3>
+
+              <p className="line-clamp-3 text-xs text-slate-600">{article.originalAbstract || "No abstract available."}</p>
+
+              <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-medium text-slate-500">{article.journalName}</span>
+                  <span className="h-1 w-1 rounded-full bg-slate-300" />
+                  <span className="text-[10px] text-slate-500">
+                    {new Date(article.publishedAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </span>
+                </div>
+                <a href={`/article/${article.id}`} className="text-[10px] font-bold text-[#136dec]">
+                  View Details
+                </a>
+              </div>
+
+              <SummariseButton
+                payload={{
+                  title: article.title,
+                  abstract: article.originalAbstract,
+                  url: article.url,
+                  journal: article.journalName,
+                  doi: article.doi,
+                }}
+              />
+            </article>
+          ))}
+
+          {articles.length === 0 && (
+            <div className="rounded-xl border border-white/30 bg-white/10 p-4 text-sm text-white/85">
+              No articles found. Add sources in admin and run your scraper.
             </div>
-            <a href="/" className="search-clear">&#215; Clear all</a>
-          </div>
-        )}
-      </div>
+          )}
 
-      <div className="section-divider">
-        <div className="section-divider-bar">
-          <span className="section-divider-label">{selectedJournal ? selectedJournal : query ? "Search Results" : `Page ${currentPage} of ${totalPages}`}</span>
-          <div className="section-divider-line" />
-        </div>
-      </div>
-
-      <main className="grid-section">
-        <div className="articles-grid">
-          {fetchError ? (<ErrorState />) : articles.length === 0 ? (<EmptyState query={query} />) : (articles.map((article) => (<ArticleCard key={article.id} article={article} highlightJournal={selectedJournal} />)))}
-        </div>
-      </main>
-
-      {!fetchError && totalPages > 1 && (
-        <div className="pagination">
-          <span className="pagination-info">{offset + 1}&#8211;{Math.min(offset + PAGE_SIZE, totalCount)} of {totalCount}</span>
-          <div className="pagination-controls">
-            <a href={buildUrl({ page: currentPage - 1 })} className={`pagination-btn${currentPage <= 1 ? " disabled" : ""}`}>{'\u2190'} Prev</a>
-            <div className="pagination-pages">
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                .reduce<(number | "...")[]>((acc, p, idx, arr) => {
-                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("...");
-                  acc.push(p);
-                  return acc;
-                }, [])
-                .map((p, i) =>
-                  p === "..." ? (<span key={`e${i}`} className="pagination-ellipsis">&#8230;</span>) : (<a key={p} href={buildUrl({ page: p as number })} className={`pagination-page${p === currentPage ? " active" : ""}`}>{p}</a>)
-                )}
+          {(hasPrevious || hasMore) && (
+            <div className="mt-2 flex items-center justify-center gap-3">
+              {hasPrevious && (
+                <Link
+                  href={currentPage === 2 ? "/" : `/?page=${currentPage - 1}`}
+                  className="rounded-md bg-white/15 px-3 py-2 text-xs font-semibold"
+                >
+                  Previous
+                </Link>
+              )}
+              {hasMore && (
+                <Link href={`/?page=${currentPage + 1}`} className="rounded-md bg-white px-3 py-2 text-xs font-bold text-[#0b2a66]">
+                  View More Articles
+                </Link>
+              )}
             </div>
-            <a href={buildUrl({ page: currentPage + 1 })} className={`pagination-btn${currentPage >= totalPages ? " disabled" : ""}`}>Next {'\u2192'}</a>
-          </div>
+          )}
         </div>
-      )}
+      </section>
 
-      <footer className="footer">
-        <div className="footer-inner">
-          <span className="footer-brand">Bite&#8209;Sized Club</span>
-          <span className="footer-copy">Open Access &#183; Medical Research</span>
-          <a href="/admin" style={{ fontSize: "0.62rem", color: "#c8a96e", textDecoration: "none", letterSpacing: "0.1em", textTransform: "uppercase" }}>Admin</a>
-        </div>
-        <div className="footer-disclaimer">
-          All article titles, abstracts, and metadata belong to their respective publishers and authors.
-          This site links to original sources and is intended for personal and educational use only.
-          AI summaries are generated automatically and may not be fully accurate.
-        </div>
-      </footer>
-    </>
+      <div className="fixed bottom-0 z-10 flex w-full gap-2 border-t border-white/25 bg-[#0b2a66]/95 px-4 pb-6 pt-3 backdrop-blur-md">
+        <Link href="/" className="flex flex-1 flex-col items-center justify-center gap-1 text-white">
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
+            home
+          </span>
+          <p className="text-[10px] font-bold tracking-wide">Home</p>
+        </Link>
+        <Link href="/discover" className="flex flex-1 flex-col items-center justify-center gap-1 text-white/70 transition-colors hover:text-white">
+          <span className="material-symbols-outlined">explore</span>
+          <p className="text-[10px] font-medium tracking-wide">Discover</p>
+        </Link>
+        <Link href="/saved" className="flex flex-1 flex-col items-center justify-center gap-1 text-white/70 transition-colors hover:text-white">
+          <span className="material-symbols-outlined">bookmarks</span>
+          <p className="text-[10px] font-medium tracking-wide">Saved</p>
+        </Link>
+        <Link href="/profile" className="flex flex-1 flex-col items-center justify-center gap-1 text-white/70 transition-colors hover:text-white">
+          <span className="material-symbols-outlined">person</span>
+          <p className="text-[10px] font-medium tracking-wide">Profile</p>
+        </Link>
+      </div>
+    </div>
   );
 }

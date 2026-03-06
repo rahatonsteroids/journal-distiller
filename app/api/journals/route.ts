@@ -2,8 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/prisma";
 
 function isAdmin(req: NextRequest) {
-  return req.cookies.get("admin_token");
+  return req.cookies.get("admin_token") || req.cookies.get("token");
 }
+
+export async function GET(req: NextRequest) {
+  const admin = isAdmin(req);
+  if (!admin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const sql = getDb();
+    const rows = await sql`
+      SELECT id, name, url
+      FROM journals
+      ORDER BY id DESC
+    `;
+    return NextResponse.json(rows);
+  } catch (error) {
+    console.error("Error fetching journals:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch journals", details: String(error) },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(req: NextRequest) {
   const admin = isAdmin(req);
   if (!admin) {

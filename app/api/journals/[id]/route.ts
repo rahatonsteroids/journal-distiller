@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/prisma";
 
 function isAdmin(req: NextRequest) {
-  return req.cookies.get("admin_token");
+  return req.cookies.get("admin_token") || req.cookies.get("token");
 }
 
 export async function PUT(
