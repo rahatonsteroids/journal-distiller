@@ -21,6 +21,18 @@ interface Journal {
   url: string;
 }
 
+function mapArticleRow(row: Record<string, any>): Article {
+  return {
+    id: String(row.id),
+    title: String(row.title ?? ""),
+    originalAbstract: String(row.originalAbstract ?? ""),
+    journalName: String(row.journalName ?? ""),
+    publishedAt: String(row.publishedAt ?? ""),
+    authors: row.authors ? String(row.authors) : undefined,
+    pmid: row.pmid ? String(row.pmid) : undefined,
+  };
+}
+
 export default async function NewDesignPage({
   searchParams,
 }: {
@@ -71,7 +83,7 @@ export default async function NewDesignPage({
             AND "journalName" = ${selectedJournal}
         `,
       ]);
-      articles = rows;
+      articles = rows.map(mapArticleRow);
       totalCount = countRows[0].count;
     } else if (hasSearch) {
       const searchTerm = `%${query}%`;
@@ -84,21 +96,21 @@ export default async function NewDesignPage({
         `,
         sql`SELECT COUNT(*)::int AS count FROM "Article" WHERE title ILIKE ${searchTerm} OR "originalAbstract" ILIKE ${searchTerm}`,
       ]);
-      articles = rows;
+      articles = rows.map(mapArticleRow);
       totalCount = countRows[0].count;
     } else if (hasJournal) {
       const [rows, countRows] = await Promise.all([
         sql`SELECT * FROM "Article" WHERE "journalName" = ${selectedJournal} ORDER BY "publishedAt" DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
         sql`SELECT COUNT(*)::int AS count FROM "Article" WHERE "journalName" = ${selectedJournal}`,
       ]);
-      articles = rows;
+      articles = rows.map(mapArticleRow);
       totalCount = countRows[0].count;
     } else {
       const [rows, countRows] = await Promise.all([
         sql`SELECT * FROM "Article" ORDER BY "publishedAt" DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
         sql`SELECT COUNT(*)::int AS count FROM "Article"`,
       ]);
-      articles = rows;
+      articles = rows.map(mapArticleRow);
       totalCount = countRows[0].count;
     }
   } catch (error) {
