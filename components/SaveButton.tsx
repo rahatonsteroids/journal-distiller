@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export default function SaveButton({ articleId }: { articleId: number }) {
+export default function SaveButton({ articleId }: { articleId: number | string }) {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -10,26 +10,33 @@ export default function SaveButton({ articleId }: { articleId: number }) {
     setLoading(true);
 
     try {
+      console.log("Saving article:", articleId);
+      
       const res = await fetch("/api/saved-articles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ articleId }),
+        body: JSON.stringify({ articleId: String(articleId) }),
       });
+
+      const data = await res.json();
+      console.log("Save response:", data);
 
       if (res.ok) {
         setSaved(true);
-        alert("Article saved to your profile!");
+        alert("✓ Article saved to your profile!");
       } else {
-        const data = await res.json();
         if (data.error === "Not authenticated") {
           alert("Please login to save articles");
           window.location.href = "/auth/login";
+        } else if (data.error === "Article already saved") {
+          setSaved(true);
         } else {
-          alert(data.error || "Failed to save");
+          alert("Error: " + (data.error || "Failed to save"));
         }
       }
     } catch (error) {
-      alert("Error saving article");
+      console.error("Save error:", error);
+      alert("Error saving article: " + String(error));
     } finally {
       setLoading(false);
     }
