@@ -2,6 +2,19 @@ import { getDb } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import SaveButton from "@/components/SaveButton";
 
+function cleanXMLContent(text: string): string {
+  if (!text) return "";
+  // Remove XML tags like <sec>, <st>, <p>, </p>, etc.
+  return text
+    .replace(/<[^>]*>/g, "")
+    .replace(/&rsquo;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&ldquo;/g, '"')
+    .replace(/&rdquo;/g, '"')
+    .replace(/&amp;/g, "&")
+    .trim();
+}
+
 export default async function ArticleDetailPage({
   params,
 }: {
@@ -104,7 +117,7 @@ export default async function ArticleDetailPage({
               <div className="section">
                 <h2 className="section-title">Abstract</h2>
                 <div className="section-content">
-                  {article.originalAbstract}
+                  {cleanXMLContent(article.originalAbstract)}
                 </div>
               </div>
             )}
@@ -113,7 +126,7 @@ export default async function ArticleDetailPage({
               <div className="section">
                 <h2 className="section-title">AI Summary</h2>
                 <div className="section-content">
-                  {article.aiSummary}
+                  {cleanXMLContent(article.aiSummary)}
                 </div>
               </div>
             )}
