@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDb } from "@/lib/prisma";
 import SummariseButton from "@/components/SummariseButton";
+import SaveButton from "@/components/SaveButton";
 
 type HomeArticle = {
   id: string;
@@ -22,36 +23,64 @@ const PAGE_SIZE = 20;
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ page?: string }>;
+  searchParams?: Promise<{ page?: string; q?: string }>;
 }) {
   const sql = getDb();
   let articles: HomeArticle[] = [];
   let allJournals: JournalRow[] = [];
   let totalArticles = 0;
   const resolvedSearchParams = (await searchParams) ?? {};
+  const query = (resolvedSearchParams.q ?? "").trim();
   const currentPage = Math.max(1, Number.parseInt(resolvedSearchParams.page ?? "1", 10) || 1);
   const offset = (currentPage - 1) * PAGE_SIZE;
 
   try {
-    const countRows = await sql`SELECT COUNT(*)::int AS count FROM "Article"`;
-    totalArticles = Number(countRows[0]?.count ?? 0);
-
-    const [rows, journalRows] = await Promise.all([
+    const [journalRows] = await Promise.all([
       sql`
-      SELECT id, title, "originalAbstract", "journalName", "publishedAt", url, doi
-      FROM "Article"
-      ORDER BY "publishedAt" DESC
-      LIMIT ${PAGE_SIZE}
-      OFFSET ${offset}
-    `,
-      sql`
-      SELECT id, name, url
-      FROM journals
-      ORDER BY id DESC
+        SELECT id, name, url
+        FROM journals
+        ORDER BY id DESC
       `,
     ]);
-    articles = rows as HomeArticle[];
     allJournals = journalRows as JournalRow[];
+
+    if (query) {
+      const pattern = `%${query}%`;
+      const [countRows, rows] = await Promise.all([
+        sql`
+          SELECT COUNT(*)::int AS count
+          FROM "Article"
+          WHERE title ILIKE ${pattern}
+            OR "originalAbstract" ILIKE ${pattern}
+            OR "journalName" ILIKE ${pattern}
+        `,
+        sql`
+          SELECT id, title, "originalAbstract", "journalName", "publishedAt", url, doi
+          FROM "Article"
+          WHERE title ILIKE ${pattern}
+            OR "originalAbstract" ILIKE ${pattern}
+            OR "journalName" ILIKE ${pattern}
+          ORDER BY "publishedAt" DESC
+          LIMIT ${PAGE_SIZE}
+          OFFSET ${offset}
+        `,
+      ]);
+      totalArticles = Number(countRows[0]?.count ?? 0);
+      articles = rows as HomeArticle[];
+    } else {
+      const [countRows, rows] = await Promise.all([
+        sql`SELECT COUNT(*)::int AS count FROM "Article"`,
+        sql`
+          SELECT id, title, "originalAbstract", "journalName", "publishedAt", url, doi
+          FROM "Article"
+          ORDER BY "publishedAt" DESC
+          LIMIT ${PAGE_SIZE}
+          OFFSET ${offset}
+        `,
+      ]);
+      totalArticles = Number(countRows[0]?.count ?? 0);
+      articles = rows as HomeArticle[];
+    }
   } catch (error) {
     console.error("Home article query error:", error);
   }
@@ -59,6 +88,14 @@ export default async function HomePage({
   const hasMore = currentPage * PAGE_SIZE < totalArticles;
   const hasPrevious = currentPage > 1;
   const journals = allJournals.slice(0, 8);
+
+  function makePageHref(page: number): string {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (page > 1) params.set("page", String(page));
+    const qs = params.toString();
+    return qs ? `/?${qs}` : "/";
+  }
 
   return (
     <div className="min-h-screen bg-[#0b2a66] text-white">
@@ -68,6 +105,26 @@ export default async function HomePage({
           Admin
         </Link>
       </header>
+
+      <section className="px-4">
+        <form action="/" method="GET" className="relative">
+          <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+            search
+          </span>
+          <input
+            name="q"
+            defaultValue={query}
+            placeholder="Search articles, abstracts, journals..."
+            className="h-11 w-full rounded-xl border border-white/35 bg-white/95 pl-10 pr-24 text-sm text-slate-900 outline-none focus:border-white"
+          />
+          <button
+            type="submit"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-[#136dec] px-3 py-1.5 text-xs font-semibold text-white"
+          >
+            Search
+          </button>
+        </form>
+      </section>
 
       <section className="mt-4">
         <div className="mb-2 flex items-center justify-between px-4">
@@ -94,7 +151,7 @@ export default async function HomePage({
 
       <section className="mt-2 px-4 pb-24">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-bold">Latest Articles</h2>
+          <h2 className="text-base font-bold">{query ? `Search Results for "${query}"` : "Latest Articles"}</h2>
           <span className="text-xs text-white/80">{totalArticles} total</span>
         </div>
         <div className="flex flex-col gap-4">
@@ -121,6 +178,10 @@ export default async function HomePage({
                 </a>
               </div>
 
+              <div>
+                <SaveButton articleId={article.id} variant="tag" />
+              </div>
+
               <SummariseButton
                 payload={{
                   title: article.title,
@@ -143,14 +204,14 @@ export default async function HomePage({
             <div className="mt-2 flex items-center justify-center gap-3">
               {hasPrevious && (
                 <Link
-                  href={currentPage === 2 ? "/" : `/?page=${currentPage - 1}`}
+                  href={makePageHref(currentPage - 1)}
                   className="rounded-md bg-white/15 px-3 py-2 text-xs font-semibold"
                 >
                   Previous
                 </Link>
               )}
               {hasMore && (
-                <Link href={`/?page=${currentPage + 1}`} className="rounded-md bg-white px-3 py-2 text-xs font-bold text-[#0b2a66]">
+                <Link href={makePageHref(currentPage + 1)} className="rounded-md bg-white px-3 py-2 text-xs font-bold text-[#0b2a66]">
                   View More Articles
                 </Link>
               )}

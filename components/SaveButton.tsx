@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 
-export default function SaveButton({ articleId }: { articleId: number | string }) {
+export default function SaveButton({
+  articleId,
+  variant = "default",
+}: {
+  articleId: number | string;
+  variant?: "default" | "tag";
+}) {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -10,49 +16,46 @@ export default function SaveButton({ articleId }: { articleId: number | string }
     setLoading(true);
 
     try {
-      console.log("Saving article:", articleId);
-      
       const res = await fetch("/api/saved-articles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ articleId: String(articleId) }),
       });
 
-      const data = await res.json();
-      console.log("Save response:", data);
+      const data = (await res.json()) as { error?: string };
 
-      if (res.ok) {
+      if (res.ok || data.error === "Article already saved") {
         setSaved(true);
-        alert("✓ Article saved to your profile!");
-      } else {
-        if (data.error === "Not authenticated") {
-          alert("Please login to save articles");
-          window.location.href = "/auth/login";
-        } else if (data.error === "Article already saved") {
-          setSaved(true);
-        } else {
-          alert("Error: " + (data.error || "Failed to save"));
-        }
+        return;
+      }
+
+      if (data.error === "Not authenticated") {
+        window.location.href = "/auth/login";
       }
     } catch (error) {
       console.error("Save error:", error);
-      alert("Error saving article: " + String(error));
     } finally {
       setLoading(false);
     }
   }
 
+  const defaultClass = saved
+    ? "bg-green-600 text-white cursor-not-allowed"
+    : "bg-yellow-500 hover:bg-yellow-400 text-black";
+
+  const tagClass = saved
+    ? "border-green-300 bg-green-50 text-green-700 cursor-not-allowed"
+    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50";
+
   return (
     <button
       onClick={handleSave}
       disabled={saved || loading}
-      className={`px-4 py-2 rounded text-sm font-semibold transition ${
-        saved
-          ? "bg-green-600 text-white cursor-not-allowed"
-          : "bg-yellow-500 hover:bg-yellow-400 text-black"
+      className={`rounded px-3 py-1.5 text-xs font-semibold transition ${
+        variant === "tag" ? tagClass : defaultClass
       }`}
     >
-      {saved ? "✓ Saved" : loading ? "Saving..." : "Save Article"}
+      {saved ? "Saved" : loading ? "Saving..." : variant === "tag" ? "Save" : "Save Article"}
     </button>
   );
 }
