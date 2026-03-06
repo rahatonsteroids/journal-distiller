@@ -45,7 +45,11 @@ export default async function NewDesignPage({
 
     // Get journals
     const journalRows = await sql`SELECT id, name, url FROM journals ORDER BY name ASC`;
-    journals = journalRows;
+    journals = journalRows.map((row) => ({
+      id: Number(row.id),
+      name: String(row.name),
+      url: String(row.url),
+    }));
 
     // Get articles
     const hasSearch = !!query;
