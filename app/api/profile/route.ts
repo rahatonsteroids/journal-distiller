@@ -3,9 +3,14 @@ import { getDb } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   try {
+    console.log("Profile API called");
+    console.log("Cookies:", req.cookies.getAll());
+    
     const userId = req.cookies.get("user_id")?.value;
+    console.log("User ID from cookie:", userId);
 
     if (!userId) {
+      console.log("No user_id cookie found");
       return NextResponse.json(
         { error: "Not authenticated" },
         { status: 401 }
@@ -18,6 +23,8 @@ export async function GET(req: NextRequest) {
     const users = await sql`
       SELECT id, email FROM users WHERE id = ${parseInt(userId)}
     `;
+
+    console.log("Users found:", users.length);
 
     if (users.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -39,7 +46,7 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error("Profile error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch profile" },
+      { error: "Failed to fetch profile", details: String(error) },
       { status: 500 }
     );
   }
