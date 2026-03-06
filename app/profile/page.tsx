@@ -90,10 +90,7 @@ export default function ProfilePage() {
           {savedArticles.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-zinc-400 mb-4">No saved articles yet</p>
-              
-                href="/"
-                className="text-yellow-500 hover:text-yellow-400 underline"
-              >
+              <a href="/" className="text-yellow-500 hover:text-yellow-400 underline">
                 Browse articles and save your favorites
               </a>
             </div>
