@@ -1,6 +1,7 @@
 // app/page.tsx
 import { getDb } from "../lib/prisma";
 import ArticleCard from "../components/ArticleCard";
+import { cookies } from "next/headers";
 
 export const revalidate = 0;
 const PAGE_SIZE = 24;
@@ -31,6 +32,8 @@ export default async function Home({
   searchParams: Promise<{ page?: string; q?: string; journal?: string }>;
 }) {
   const params = await searchParams;
+  const cookieStore = await cookies();
+  const currentUser = cookieStore.get("user_id")?.value;
   const currentPage = Math.max(1, parseInt(params.page ?? "1", 10));
   const query = params.q?.trim() ?? "";
   const selectedJournal = params.journal?.trim() ?? "";
@@ -211,6 +214,15 @@ export default async function Home({
           </a>
           <div className="nav-right">
             <span className="nav-date">{today}</span>
+            {!currentUser && (
+              <div className="flex gap-2">
+                <a href="/auth/login" className="nav-pill">Login</a>
+                <a href="/auth/signup" className="nav-pill">Sign Up</a>
+              </div>
+            )}
+            {currentUser && (
+              <a href="/profile" className="nav-pill">Profile</a>
+            )}
             {!fetchError && journals.length > 0 && (
               <div className="journal-select-wrap">
                 <select className="journal-select" defaultValue={selectedJournal} id="journal-select" name="journal">

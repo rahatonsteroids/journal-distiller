@@ -1,6 +1,7 @@
 ﻿"use client";
 // components/ArticleCard.tsx
 import { useState } from "react";
+import SaveButton from "./SaveButton";
 
 export default function ArticleCard({
   article,
@@ -93,6 +94,7 @@ export default function ArticleCard({
 
       <div className="ac-footer">
         <span className="ac-date">{formattedDate}</span>
+        <SaveButton articleId={article.id} />
         <a href={article.url} target="_blank" rel="noopener noreferrer" className="ac-link">
           Read Paper &#8594;
         </a>
